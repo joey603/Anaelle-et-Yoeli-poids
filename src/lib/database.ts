@@ -66,6 +66,8 @@ export async function fetchAppState(): Promise<AppState | null> {
 export async function saveAppState(state: AppState): Promise<void> {
   if (!supabase) return
 
+  const profileIds = state.profiles.map((p) => p.id)
+
   const profileRows = state.profiles.map((p) => ({
     id: p.id,
     name: p.name,
@@ -84,17 +86,32 @@ export async function saveAppState(state: AppState): Promise<void> {
     })),
   )
 
+  const localEntryIds = new Set(entryRows.map((e) => e.id))
+
   const { error: profilesError } = await supabase.from('profiles').upsert(profileRows)
   if (profilesError) throw profilesError
 
-  const { error: deleteError } = await supabase
-    .from('weight_entries')
-    .delete()
-    .in('profile_id', state.profiles.map((p) => p.id))
-  if (deleteError) throw deleteError
-
   if (entryRows.length > 0) {
-    const { error: entriesError } = await supabase.from('weight_entries').insert(entryRows)
+    const { error: entriesError } = await supabase.from('weight_entries').upsert(entryRows)
     if (entriesError) throw entriesError
+  }
+
+  const { data: existingEntries, error: fetchError } = await supabase
+    .from('weight_entries')
+    .select('id')
+    .in('profile_id', profileIds)
+
+  if (fetchError) throw fetchError
+
+  const orphanIds = (existingEntries ?? [])
+    .map((row) => row.id)
+    .filter((id) => !localEntryIds.has(id))
+
+  if (orphanIds.length > 0) {
+    const { error: deleteError } = await supabase
+      .from('weight_entries')
+      .delete()
+      .in('id', orphanIds)
+    if (deleteError) throw deleteError
   }
 }

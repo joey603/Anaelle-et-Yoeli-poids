@@ -73,9 +73,33 @@ function isDbEmpty(state: AppState): boolean {
   )
 }
 
+function profileScore(profile: Profile): number {
+  let score = 0
+  if (profile.initialWeight > 0) score += 100
+  if (profile.goalWeight > 0) score += 100
+  score += profile.entries.length * 10
+  return score
+}
+
+function mergeProfiles(remote: Profile[], local: Profile[]): Profile[] {
+  const ids = [...new Set([...remote.map((p) => p.id), ...local.map((p) => p.id)])]
+
+  return ids.map((id) => {
+    const remoteProfile = remote.find((p) => p.id === id)
+    const localProfile = local.find((p) => p.id === id)
+
+    if (!remoteProfile) return localProfile!
+    if (!localProfile) return remoteProfile
+
+    return profileScore(remoteProfile) > profileScore(localProfile)
+      ? remoteProfile
+      : localProfile
+  })
+}
+
 function mergeRemoteState(remote: AppState, local: AppState): AppState {
   return migrateState({
-    profiles: remote.profiles,
+    profiles: mergeProfiles(remote.profiles, local.profiles),
     activeProfileId: local.activeProfileId,
   })
 }
@@ -88,14 +112,18 @@ export function useWeightStore() {
   const [syncError, setSyncError] = useState<string | null>(null)
   const skipNextSave = useRef(false)
   const isSavingRef = useRef(false)
+  const blockReloadUntil = useRef(0)
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const reloadTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const prevStateRef = useRef(state)
 
   const applyRemoteState = useCallback((remote: AppState) => {
-    skipNextSave.current = true
     setState((current) => {
       const merged = mergeRemoteState(remote, current)
+      if (JSON.stringify(merged.profiles) === JSON.stringify(current.profiles)) {
+        return current
+      }
+      skipNextSave.current = true
       saveLocalState(merged)
       return merged
     })
@@ -104,6 +132,7 @@ export function useWeightStore() {
 
   const reloadFromCloud = useCallback(async () => {
     if (!isSupabaseConfigured || isSavingRef.current) return
+    if (Date.now() < blockReloadUntil.current) return
 
     try {
       const remote = await fetchAppState()
@@ -115,10 +144,11 @@ export function useWeightStore() {
 
   const scheduleReloadFromCloud = useCallback(() => {
     if (isSavingRef.current) return
+    if (Date.now() < blockReloadUntil.current) return
     if (reloadTimer.current) clearTimeout(reloadTimer.current)
     reloadTimer.current = setTimeout(() => {
       void reloadFromCloud()
-    }, 500)
+    }, 1500)
   }, [reloadFromCloud])
 
   useEffect(() => {
@@ -205,6 +235,7 @@ export function useWeightStore() {
 
     saveTimer.current = setTimeout(async () => {
       isSavingRef.current = true
+      blockReloadUntil.current = Date.now() + 15000
       setIsSaving(true)
       try {
         await saveAppState(state)
@@ -213,6 +244,7 @@ export function useWeightStore() {
         setSyncError('Échec de la sauvegarde cloud. Réessayez.')
       } finally {
         isSavingRef.current = false
+        blockReloadUntil.current = Date.now() + 2500
         setIsSaving(false)
       }
     }, 400)

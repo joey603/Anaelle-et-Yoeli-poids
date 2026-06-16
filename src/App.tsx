@@ -32,6 +32,14 @@ function App() {
 
   const [showSetup, setShowSetup] = useState(false)
 
+  function handleSelectProfile(id: string) {
+    if (id !== state.activeProfileId) {
+      setShowSetup(false)
+    }
+
+    setActiveProfile(id)
+  }
+
   return (
     <div className="min-h-screen pb-8">
       <Header />
@@ -54,12 +62,13 @@ function App() {
         <ProfileTabs
           profiles={state.profiles}
           activeId={state.activeProfileId}
-          onSelect={setActiveProfile}
+          onSelect={handleSelectProfile}
           disabled={isSaving}
         />
 
         {!isConfigured || showSetup ? (
           <SetupForm
+            key={activeProfile.id}
             profile={activeProfile}
             disabled={isSaving}
             onSave={(updates) => {

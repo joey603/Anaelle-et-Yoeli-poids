@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { AppState, EncouragementMessage, Profile } from '../types'
-import { fetchAppState, saveAppState } from '../lib/database'
+import { deleteWeightEntries, fetchAppState, saveAppState } from '../lib/database'
 import { isSupabaseConfigured, supabase } from '../lib/supabase'
 import { calculateChange, getLatestWeight } from '../utils/calculations'
 import { getEncouragementMessage } from '../utils/messages'
@@ -57,8 +57,14 @@ function saveLocalState(state: AppState) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state))
 }
 
-function profilesEqual(a: Profile[], b: Profile[]): boolean {
-  return JSON.stringify(a) === JSON.stringify(b)
+function getChangedProfileIds(previous: Profile[], next: Profile[]): string[] {
+  const ids = [...new Set([...previous.map((p) => p.id), ...next.map((p) => p.id)])]
+
+  return ids.filter((id) => {
+    const previousProfile = previous.find((p) => p.id === id)
+    const nextProfile = next.find((p) => p.id === id)
+    return JSON.stringify(previousProfile) !== JSON.stringify(nextProfile)
+  })
 }
 
 function hasLocalData(state: AppState): boolean {
@@ -73,14 +79,6 @@ function isDbEmpty(state: AppState): boolean {
   )
 }
 
-function profileScore(profile: Profile): number {
-  let score = 0
-  if (profile.initialWeight > 0) score += 100
-  if (profile.goalWeight > 0) score += 100
-  score += profile.entries.length * 10
-  return score
-}
-
 function mergeProfiles(remote: Profile[], local: Profile[]): Profile[] {
   const ids = [...new Set([...remote.map((p) => p.id), ...local.map((p) => p.id)])]
 
@@ -91,9 +89,19 @@ function mergeProfiles(remote: Profile[], local: Profile[]): Profile[] {
     if (!remoteProfile) return localProfile!
     if (!localProfile) return remoteProfile
 
-    return profileScore(remoteProfile) > profileScore(localProfile)
-      ? remoteProfile
-      : localProfile
+    const remoteHasData =
+      remoteProfile.initialWeight > 0 ||
+      remoteProfile.goalWeight > 0 ||
+      remoteProfile.entries.length > 0
+
+    const localHasData =
+      localProfile.initialWeight > 0 ||
+      localProfile.goalWeight > 0 ||
+      localProfile.entries.length > 0
+
+    if (!remoteHasData && localHasData) return localProfile
+
+    return remoteProfile
   })
 }
 
@@ -115,6 +123,8 @@ export function useWeightStore() {
   const blockReloadUntil = useRef(0)
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const reloadTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const pendingProfileIdsRef = useRef<Set<string>>(new Set())
+  const pendingDeletedEntryIdsRef = useRef<Set<string>>(new Set())
   const prevStateRef = useRef(state)
 
   const applyRemoteState = useCallback((remote: AppState) => {
@@ -215,9 +225,10 @@ export function useWeightStore() {
 
   useEffect(() => {
     const prev = prevStateRef.current
+    const changedProfileIds = getChangedProfileIds(prev.profiles, state.profiles)
     const onlyTabChanged =
       prev.activeProfileId !== state.activeProfileId &&
-      profilesEqual(prev.profiles, state.profiles)
+      changedProfileIds.length === 0
 
     prevStateRef.current = state
     saveLocalState(state)
@@ -230,15 +241,24 @@ export function useWeightStore() {
     }
 
     if (onlyTabChanged) return
+    if (changedProfileIds.length === 0) return
+
+    changedProfileIds.forEach((id) => pendingProfileIdsRef.current.add(id))
 
     if (saveTimer.current) clearTimeout(saveTimer.current)
 
     saveTimer.current = setTimeout(async () => {
+      const profileIdsToSave = Array.from(pendingProfileIdsRef.current)
+      const entryIdsToDelete = Array.from(pendingDeletedEntryIdsRef.current)
+
       isSavingRef.current = true
       blockReloadUntil.current = Date.now() + 15000
       setIsSaving(true)
       try {
-        await saveAppState(state)
+        await deleteWeightEntries(entryIdsToDelete)
+        await saveAppState(state, profileIdsToSave)
+        profileIdsToSave.forEach((id) => pendingProfileIdsRef.current.delete(id))
+        entryIdsToDelete.forEach((id) => pendingDeletedEntryIdsRef.current.delete(id))
         setSyncError(null)
       } catch {
         setSyncError('Échec de la sauvegarde cloud. Réessayez.')
@@ -246,13 +266,17 @@ export function useWeightStore() {
         isSavingRef.current = false
         blockReloadUntil.current = Date.now() + 2500
         setIsSaving(false)
+        if (reloadTimer.current) clearTimeout(reloadTimer.current)
+        reloadTimer.current = setTimeout(() => {
+          void reloadFromCloud()
+        }, 2600)
       }
     }, 400)
 
     return () => {
       if (saveTimer.current) clearTimeout(saveTimer.current)
     }
-  }, [state])
+  }, [reloadFromCloud, state])
 
   const activeProfile =
     state.profiles.find((p) => p.id === state.activeProfileId) ?? state.profiles[0]
@@ -307,6 +331,7 @@ export function useWeightStore() {
 
   const deleteEntry = useCallback(
     (entryId: string) => {
+      pendingDeletedEntryIdsRef.current.add(entryId)
       setState((s) => ({
         ...s,
         profiles: s.profiles.map((p) => {

@@ -63,12 +63,19 @@ export async function fetchAppState(): Promise<AppState | null> {
   }
 }
 
-export async function saveAppState(state: AppState): Promise<void> {
+export async function saveAppState(
+  state: AppState,
+  profileIdsToSave = state.profiles.map((p) => p.id),
+): Promise<void> {
   if (!supabase) return
 
-  const profileIds = state.profiles.map((p) => p.id)
+  const profilesToSave = state.profiles.filter((p) =>
+    profileIdsToSave.includes(p.id),
+  )
 
-  const profileRows = state.profiles.map((p) => ({
+  if (profilesToSave.length === 0) return
+
+  const profileRows = profilesToSave.map((p) => ({
     id: p.id,
     name: p.name,
     initial_weight: p.initialWeight,
@@ -76,7 +83,7 @@ export async function saveAppState(state: AppState): Promise<void> {
     color: p.color,
   }))
 
-  const entryRows = state.profiles.flatMap((p) =>
+  const entryRows = profilesToSave.flatMap((p) =>
     p.entries.map((e) => ({
       id: e.id,
       profile_id: p.id,
@@ -86,8 +93,6 @@ export async function saveAppState(state: AppState): Promise<void> {
     })),
   )
 
-  const localEntryIds = new Set(entryRows.map((e) => e.id))
-
   const { error: profilesError } = await supabase.from('profiles').upsert(profileRows)
   if (profilesError) throw profilesError
 
@@ -95,23 +100,11 @@ export async function saveAppState(state: AppState): Promise<void> {
     const { error: entriesError } = await supabase.from('weight_entries').upsert(entryRows)
     if (entriesError) throw entriesError
   }
+}
 
-  const { data: existingEntries, error: fetchError } = await supabase
-    .from('weight_entries')
-    .select('id')
-    .in('profile_id', profileIds)
+export async function deleteWeightEntries(entryIds: string[]): Promise<void> {
+  if (!supabase || entryIds.length === 0) return
 
-  if (fetchError) throw fetchError
-
-  const orphanIds = (existingEntries ?? [])
-    .map((row) => row.id)
-    .filter((id) => !localEntryIds.has(id))
-
-  if (orphanIds.length > 0) {
-    const { error: deleteError } = await supabase
-      .from('weight_entries')
-      .delete()
-      .in('id', orphanIds)
-    if (deleteError) throw deleteError
-  }
+  const { error } = await supabase.from('weight_entries').delete().in('id', entryIds)
+  if (error) throw error
 }

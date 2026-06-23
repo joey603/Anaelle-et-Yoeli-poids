@@ -37,15 +37,8 @@ export function WeightTable({ profile, onDelete, disabled }: WeightTableProps) {
             </tr>
           </thead>
           <tbody>
-            <tr className="border-t border-slate-100 bg-slate-50/40">
-              <td className="px-4 sm:px-6 py-3 text-slate-400">—</td>
-              <td className="px-4 sm:px-6 py-3 text-slate-600">Départ</td>
-              <td className="px-4 sm:px-6 py-3 font-semibold">{profile.initialWeight} kg</td>
-              <td className="px-4 sm:px-6 py-3 text-slate-400">—</td>
-              <td></td>
-            </tr>
             {[...profile.entries].reverse().map((entry, index) => {
-              const num = profile.entries.length - index
+              const num = profile.entries.length + 1 - index
               const changeClass =
                 entry.change === null
                   ? 'text-slate-400'
@@ -87,6 +80,13 @@ export function WeightTable({ profile, onDelete, disabled }: WeightTableProps) {
                 </tr>
               )
             })}
+            <tr className="border-t border-slate-100 bg-slate-50/40">
+              <td className="px-4 sm:px-6 py-3 text-slate-400">1</td>
+              <td className="px-4 sm:px-6 py-3 text-slate-600">Départ</td>
+              <td className="px-4 sm:px-6 py-3 font-semibold">{profile.initialWeight} kg</td>
+              <td className="px-4 sm:px-6 py-3 text-slate-400">—</td>
+              <td></td>
+            </tr>
           </tbody>
         </table>
       </div>

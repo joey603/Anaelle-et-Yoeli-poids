@@ -6,6 +6,15 @@ const lostMessages = [
   'Magnifique ! Ton effort porte ses fruits ! 🎯',
   'Quelle belle avancée ! On est fiers de toi ! ✨',
   'Excellent ! La constance paie toujours ! 🔥',
+  'Tu fonds comme un glaçon au soleil ! Continue ! 🧊',
+  'Même la balance est impressionnée. Respect ! 😎',
+  'On dirait que quelqu\'un a volé des kilos à quelqu\'un... c\'est toi le voleur ! 🦹',
+  'Alerte : tu deviens plus léger(ère) qu\'un SMS sans pièce jointe ! 📱',
+  'La gravité commence à te lâcher. Bon signe ! 🌍',
+  'Champions league de la perte de poids, tu montes en puissance ! ⚽',
+  'Ton futur pantalon te remercie déjà ! 👖',
+  'À ce rythme, bientôt tu flotteras... non, on reste sérieux, bravo ! 🎈',
+  'C\'est pas de la magie, c\'est du travail. Et ça marche ! 🪄',
 ]
 
 const gainedMessages = [
@@ -14,6 +23,15 @@ const gainedMessages = [
   'Le chemin n\'est jamais parfaitement linéaire. Tu es courageux(se) de continuer ! 🤗',
   'Un rebondissement, pas une défaite. Reprenons le cap ensemble ! 🧭',
   'Respire, analyse, et avance. Tu as déjà prouvé que tu peux le faire ! 🌸',
+  'Oups, la balance a mangé un cookie en trop... pas grave ! 🍪',
+  'Ce n\'est pas de la graisse, c\'est de l\'expérience qui s\'accumule ! 📚',
+  'Même les montagnes russes montent parfois. On redescend ensemble ! 🎢',
+  'La balance ment parfois. Ou alors elle a besoin de lunettes. 🤓',
+  'Un petit détour gastronomique ? On reprend la route ! 🗺️',
+  'Ton corps fait une pause stratégique. Rien de grave ! ⏸️',
+  'Ce n\'est pas une prise de poids, c\'est du carburant pour la prochaine victoire ! ⛽',
+  'Hier c\'était shabbat, aujourd\'hui c\'est sport. Équilibre ! ⚖️',
+  'La balance a peut-être confondu les kilos avec les grammes... ou pas. On continue ! 😅',
 ]
 
 const stableMessages = [
